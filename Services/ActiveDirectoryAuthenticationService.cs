@@ -3,6 +3,8 @@ using ActiveDirectoryAuthorization.Models;
 using Orchard.Environment.Extensions;
 using Orchard.Security;
 using Orchard.Environment;
+using Orchard;
+using Orchard.Settings;
 
 namespace ActiveDirectoryAuthorization.Services
 {
@@ -10,10 +12,19 @@ namespace ActiveDirectoryAuthorization.Services
     public class ActiveDirectoryAuthenticationService : IAuthenticationService
     {
         private readonly Work<IMembershipService> _membershipService;
+        private readonly IWorkContextAccessor _workContextAccessor;
+        private readonly ISiteService _siteService;
 
-        public ActiveDirectoryAuthenticationService(Work<IMembershipService> membershipService)
+        private bool _impersonateSiteOwner = false;
+
+        public ActiveDirectoryAuthenticationService(
+            Work<IMembershipService> membershipService,
+            ISiteService siteService,
+            IWorkContextAccessor workContextAccessor)
         {
             _membershipService = membershipService;
+            _siteService = siteService;
+            _workContextAccessor = workContextAccessor;
         }
 
         public void SignIn(IUser user, bool createPersistentCookie)
@@ -28,6 +39,16 @@ namespace ActiveDirectoryAuthorization.Services
 
         public void SetAuthenticatedUserForRequest(IUser user)
         {
+            var ctx = _workContextAccessor.GetContext();
+            if (ctx.CurrentUser == null && user != null && user == GetSiteOwner())
+            {
+                _impersonateSiteOwner = true;
+            }
+            else
+            {
+                _impersonateSiteOwner = false;
+            }
+
            // users are automatically authenticated via active directory.
         }
 
@@ -39,6 +60,9 @@ namespace ActiveDirectoryAuthorization.Services
         /// <returns></returns>
         public IUser GetAuthenticatedUser()
         {
+            if (_impersonateSiteOwner)
+                return GetSiteOwner();
+
             if (HttpContext.Current == null || HttpContext.Current.User == null)
                 return null;
 
@@ -51,6 +75,12 @@ namespace ActiveDirectoryAuthorization.Services
                 user = new ActiveDirectoryUser();
 
             return user;
+        }
+
+        private IUser GetSiteOwner()
+        {
+            var superUser = _siteService.GetSiteSettings().SuperUser;
+            return _membershipService.Value.GetUser(superUser);
         }
     }
 }
