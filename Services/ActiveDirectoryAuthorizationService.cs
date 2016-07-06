@@ -81,7 +81,15 @@ namespace ActiveDirectoryAuthorization.Services
                     else if (context.User.Has<IUserRoles>())
                     {
                         // the current user is not null, so get his roles and add "Authenticated" to it
-                        rolesToExamine = context.User.As<IUserRoles>().Roles.Union(new ActiveDirectoryUser().Roles).ToList();
+                        rolesToExamine = context.User.As<IUserRoles>().Roles;
+                        var currentUser = new ActiveDirectoryUser();
+                        
+                        //if this is not a simulated user in the admin
+                        if (!String.IsNullOrEmpty(context.User.UserName)
+                         && context.User.UserName.Equals(currentUser.UserName, StringComparison.OrdinalIgnoreCase))
+                        {
+                            rolesToExamine = rolesToExamine.Union(currentUser.Roles);
+                        }
 
                         // when it is a simulated anonymous user in the admin
                         if (!rolesToExamine.Contains(AnonymousRole[0]))
